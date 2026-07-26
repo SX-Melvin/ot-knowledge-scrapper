@@ -1,4 +1,4 @@
-import { launch } from 'puppeteer';
+import { launch, Page } from 'puppeteer';
 import dotenv from 'dotenv';
 import scrapSubmittedTicket from './scrap_submitted_ticket.js';
 import scrapPublicTicket from './scrap_public_ticket.js';
@@ -29,6 +29,17 @@ const url: string = 'https://support.opentext.com/csm';
     });
 
     try {
+        console.log({
+            ...(executablePath ? { executablePath } : {}),
+            ...(userDataDir ? { userDataDir } : {}),
+            headless,
+            defaultViewport: null,
+            args: [
+                '--disable-http2', 
+                '--disable-blink-features=AutomationControlled', // Hides the navigator.webdriver flag
+                '--no-sandbox'
+            ]
+        })
         const page = await browser.newPage();
         if(userAgent.length > 0) {
             await page.setUserAgent(userAgent);
@@ -44,37 +55,37 @@ const url: string = 'https://support.opentext.com/csm';
             timeout: 60000
         });
 
-        // Check cookie button
-        try {
-            console.log('Checking cookies button...');
-            (await page.waitForSelector('#onetrust-accept-btn-handler', {timeout: 10000}))?.click();
-            console.log('Cookies accepted');
-            await new Promise(resolve => setTimeout(resolve, 4000));
-        } catch (error) {
-            console.log('Cookies already accepted');
-        }
-
-        try {
-            // Fill credentials + login
-            await page.locator('#user').fill(username);
-            await page.locator('#password').fill(password);
-            console.log('Credentials filled');
-            
-            await page.locator('#signon').click();
-            console.log('Signing in...');
-        } catch (error) {
-            console.log("Already logged in");            
-        }
+        // // Check cookie button
+        // try {
+        //     console.log('Checking cookies button...');
+        //     await page.locator('#onetrust-accept-btn-handler').click();
+        //     console.log('Cookies accepted');
+        // } catch (error) {
+        //     console.log('Cookies already accepted');
+        // }
         
-        // Check cookie button
-        try {
-            console.log('Checking another cookies button...');
-            (await page.waitForSelector('#onetrust-accept-btn-handler', {timeout: 10000}))?.click();
-            console.log('Cookies accepted');
-            await new Promise(resolve => setTimeout(resolve, 3000));
-        } catch (error) {
-            console.log('Cookies already accepted');
-        }
+        // try {
+        //     // Fill credentials + login
+        //     await new Promise(resolve => setTimeout(resolve, 8000));
+        //     await page.locator('#user').fill(username);
+        //     await page.locator('#password').fill(password);
+        //     console.log('Credentials filled');
+            
+        //     await page.locator('#signon').click();
+        //     console.log('Signing in...');
+        // } catch (error) {
+        //     console.log("Already logged in");            
+        // }
+        
+        // // Check cookie button
+        // try {
+        //     console.log('Checking another cookies button...');
+        //     await page.locator('#onetrust-accept-btn-handler').click();
+        //     console.log('Cookies accepted');
+        //     await new Promise(resolve => setTimeout(resolve, 3000));
+        // } catch (error) {
+        //     console.log('Cookies already accepted');
+        // }
         
         if(scrapMode == "SUBMITTED_TICKET") {
             scrapSubmittedTicket(page);
