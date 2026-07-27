@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import scrapSubmittedTicket from './scrap_submitted_ticket.js';
 import scrapPublicTicket from './scrap_public_ticket.js';
 import { ScrapMode } from './types/ScrapMode.js';
+import { setTimeout as wait} from 'node:timers/promises';
 
 dotenv.config();
 
@@ -54,18 +55,18 @@ const url: string = scrapMode == ScrapMode.SUBMITTED_TICKET ? 'https://support.o
         //     console.log('Cookies already accepted');
         // }
         
-        // try {
-        //     // Fill credentials + login
-        //     await page.waitForSelector("#user");
-        //     await page.locator('#user').fill(username);
-        //     await page.locator('#password').fill(password);
-        //     console.log('Credentials filled');
+        try {
+            // Fill credentials + login
+            await page.waitForSelector("button#sitenav-login-button");
+            await page.locator('#user').fill(username);
+            await page.locator('#password').fill(password);
+            console.log('Credentials filled');
             
-        //     await page.locator('#signon').click();
-        //     console.log('Signing in...');
-        // } catch (error) {
-        //     console.log("Already logged in");            
-        // }
+            await page.locator('#signon').click();
+            console.log('Signing in...');
+        } catch (error) {
+            console.log("Already logged in");            
+        }
         
         // // Check cookie button
         // try {

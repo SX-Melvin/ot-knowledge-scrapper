@@ -13,8 +13,6 @@ const timeout: number = parseInt(process.env.DEFAULT_TIMEOUT ?? "30000");
 export default async function scrapSubmittedTicket(page: Page) {
   console.log("Scrapping submitted ticket...");
   var accountSelected: string[] = [];
-
-  // document.querySelector(".select2-results .select2-result .select2-result-label").innerText
   page.setDefaultTimeout(timeout);
 
   // =========================
@@ -27,12 +25,13 @@ export default async function scrapSubmittedTicket(page: Page) {
   while(true) {
     await clickElement(myCasesPage, '.UserName.ng-binding');
     await clickElement(myCasesPage, '.selectAccount.ng-scope');
-    await mouseDownElement(myCasesPage, '.select2-choice');
+    await mouseDownElement(myCasesPage, '.padStyle div.select2-container a.select2-choice');
     await myCasesPage.waitForSelector("div.select2-result-label");
   
     const account = await myCasesPage.$$eval(
       "div.select2-result-label",
       (els, selectedAccounts) => {
+        console.log('selectedAccounts', selectedAccounts)
         return els.find(
           x => !selectedAccounts.includes(x.innerText.trim())
         )?.innerText.trim() ?? null;
@@ -55,6 +54,7 @@ export default async function scrapSubmittedTicket(page: Page) {
         );
 
         if (element) {
+          console.log(element);
           (element as HTMLElement).click();
         }
       },
@@ -73,7 +73,7 @@ export default async function scrapSubmittedTicket(page: Page) {
 
         console.log(`Found ${linkCount} tickets`);
         
-        for (let i = 0; i < linkCount; i++) {
+        for (let i = 0; i < 1; i++) {
           // Re-query links
           const links = await myCasesPage.$$(".otTableFont.ng-scope .ng-binding[role='link']");
           if (links[i] == null) {
@@ -106,95 +106,95 @@ export default async function scrapSubmittedTicket(page: Page) {
           // Scrape ticket
           // =========================
           
-        await ticketPage.waitForSelector(".m-n.sd.ng-binding");
-        const ticketName = await ticketPage.$eval(".m-n.sd.ng-binding", el => (el as HTMLElement).innerText.trim()).catch(() => "untitled-ticket");
-        
-        await ticketPage.waitForSelector("[sn-atf-area='OT Case Description Ticket Tab']");
-        const ticketDescription = await ticketPage.$eval(
-            "[sn-atf-area='OT Case Description Ticket Tab']",
-            el => (el as HTMLElement).innerText.trim()
-          ).catch(() => "");
-  
-          const threads: string[] = [];
-          let threadNumber = 1;
-  
-          await ticketPage.waitForSelector(
-            "div.timeline-panel-inner.default-comment"
-          );
-  
-          const timelines: ElementHandle<HTMLDivElement>[] =
-            await ticketPage.$$("div.timeline-panel.timeline-border");
-  
-          for (const timeline of timelines) {
-            const paragraphs = await timeline.$eval(
-              "div.timeline-panel-inner.default-comment",
-              el =>
-                Array.from(el.querySelectorAll("p"))
-                  .map(p => (p as HTMLElement).innerText.trim())
-                  .filter(text => text.length > 0)
-            ).catch(() => []);
-  
-            const author = await timeline.$eval(
-              "div.timeline-title.h4.ng-binding",
-              el => (el as HTMLElement).innerText.trim()
-            ).catch(() => "Unknown");
-  
-            const type = await timeline.$eval(
-              "small.text-muted.journal-type.ng-binding",
+          await ticketPage.waitForSelector(".m-n.sd.ng-binding");
+          const ticketName = await ticketPage.$eval(".m-n.sd.ng-binding", el => (el as HTMLElement).innerText.trim()).catch(() => "untitled-ticket");
+          
+          await ticketPage.waitForSelector("[sn-atf-area='OT Case Description Ticket Tab']");
+          const ticketDescription = await ticketPage.$eval(
+              "[sn-atf-area='OT Case Description Ticket Tab']",
               el => (el as HTMLElement).innerText.trim()
             ).catch(() => "");
-  
-            const time = await timeline.$eval(
-              "time",
-              el =>
-                el.getAttribute("title") ??
-                (el.querySelector(
-                  ".sr-only.ng-binding"
-                ) as HTMLElement | null)?.innerText ??
-                "N/A"
-            ).catch(() => "N/A");
-  
-            threads.push(
-              createThreadFormat({
-                author,
-                type,
-                comments: paragraphs,
-                threadNumber,
-                time
-              })
+    
+            const threads: string[] = [];
+            let threadNumber = 1;
+    
+            await ticketPage.waitForSelector(
+              "div.timeline-panel-inner.default-comment"
             );
-  
-            threadNumber++;
-          }
-  
-          // =========================
-          // Save ticket
-          // =========================
-  
-          await createOKFMarkdownFile(
-            {
-              name: ticketName,
-              title: ticketName,
-              description: ticketDescription,
-              contributors: [],
-              licenses: [],
-              resources: [],
-              version: "1.0.0"
-            },
-            threads.join("\n\n")
-          );
-  
-          // =========================
-          // Close ticket tab
-          // =========================
-  
-          await ticketPage.close();
-          await myCasesPage.bringToFront();
-  
-          // Wait for list page again
-          await myCasesPage.waitForSelector(
-            ".otTableFont.ng-scope .ng-binding[role='link']"
-          );
+    
+            const timelines: ElementHandle<HTMLDivElement>[] =
+              await ticketPage.$$("div.timeline-panel.timeline-border");
+    
+            for (const timeline of timelines) {
+              const paragraphs = await timeline.$eval(
+                "div.timeline-panel-inner.default-comment",
+                el =>
+                  Array.from(el.querySelectorAll("p"))
+                    .map(p => (p as HTMLElement).innerText.trim())
+                    .filter(text => text.length > 0)
+              ).catch(() => []);
+    
+              const author = await timeline.$eval(
+                "div.timeline-title.h4.ng-binding",
+                el => (el as HTMLElement).innerText.trim()
+              ).catch(() => "Unknown");
+    
+              const type = await timeline.$eval(
+                "small.text-muted.journal-type.ng-binding",
+                el => (el as HTMLElement).innerText.trim()
+              ).catch(() => "");
+    
+              const time = await timeline.$eval(
+                "time",
+                el =>
+                  el.getAttribute("title") ??
+                  (el.querySelector(
+                    ".sr-only.ng-binding"
+                  ) as HTMLElement | null)?.innerText ??
+                  "N/A"
+              ).catch(() => "N/A");
+    
+              threads.push(
+                createThreadFormat({
+                  author,
+                  type,
+                  comments: paragraphs,
+                  threadNumber,
+                  time
+                })
+              );
+    
+              threadNumber++;
+            }
+    
+            // =========================
+            // Save ticket
+            // =========================
+    
+            await createOKFMarkdownFile(
+              {
+                name: ticketName,
+                title: ticketName,
+                description: ticketDescription,
+                contributors: [],
+                licenses: [],
+                resources: [],
+                version: "1.0.0"
+              },
+              threads.join("\n\n")
+            );
+    
+            // =========================
+            // Close ticket tab
+            // =========================
+    
+            await ticketPage.close();
+            await myCasesPage.bringToFront();
+    
+            // Wait for list page again
+            await myCasesPage.waitForSelector(
+              ".otTableFont.ng-scope .ng-binding[role='link']"
+            );
         }
   
         // =========================
@@ -217,7 +217,7 @@ export default async function scrapSubmittedTicket(page: Page) {
             el.getAttribute("disabled") === "disabled"
         );
   
-        if (isDisabled) {
+        if (!isDisabled) {
           console.log("Reached last page.");
           hasNextPage = false;
         } else {
