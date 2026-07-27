@@ -45,16 +45,9 @@ export async function createOKFMarkdownFile(
       `${safeName}.md`
     );
 
-    console.log("Output directory:", okfPath);
-    console.log("Original filename:", config.name);
-    console.log("Safe filename:", safeName);
-    console.log("Full output path:", filePath);
-
     await fs.mkdir(okfPath, {
       recursive: true
     });
-
-    console.log("Directory created/verified");
 
     await fs.writeFile(
       filePath,
@@ -64,14 +57,10 @@ export async function createOKFMarkdownFile(
       }
     );
 
-    console.log("File successfully written!");
-
     // Verify file exists
     const fileExists = await fs.access(filePath)
       .then(() => true)
       .catch(() => false);
-
-    console.log("File exists:", fileExists);
 
     return result;
 

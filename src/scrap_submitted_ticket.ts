@@ -2,7 +2,6 @@ import { ElementHandle, Page } from 'puppeteer';
 import dotenv from 'dotenv';
 import { createOKFMarkdownFile } from './utils/createOKFYamlHeader.js';
 import { createThreadFormat } from './utils/createThreadFormat.js';
-import { findElementWithInterval } from './utils/findElementWithInterval.js';
 import { setTimeout as wait} from 'node:timers/promises';
 import { clickElement } from './utils/clickElement.js';
 import { mouseDownElement } from './utils/mouseDownElement.js';
@@ -29,6 +28,7 @@ export default async function scrapSubmittedTicket(page: Page) {
     await clickElement(myCasesPage, '.UserName.ng-binding');
     await clickElement(myCasesPage, '.selectAccount.ng-scope');
     await mouseDownElement(myCasesPage, '.select2-choice');
+    await myCasesPage.waitForSelector("div.select2-result-label");
   
     const account = await myCasesPage.$$eval(
       "div.select2-result-label",
@@ -63,15 +63,12 @@ export default async function scrapSubmittedTicket(page: Page) {
 
     console.log("Scraping account:", account);
     await clickElement(myCasesPage, '.accountButton');
+    await wait(3000);
 
     let hasNextPage = true;
     while (hasNextPage) {
       try {
-        const readyState = await myCasesPage.evaluate(() => document.readyState);
-        console.log("Ready state:", readyState);
-
         await myCasesPage.waitForSelector(".otTableFont.ng-scope .ng-binding[role='link']");
-        console.log(`1`);
         const linkCount = await myCasesPage.$$eval(".otTableFont.ng-scope .ng-binding[role='link']", els => els.length);
 
         console.log(`Found ${linkCount} tickets`);
@@ -79,65 +76,41 @@ export default async function scrapSubmittedTicket(page: Page) {
         for (let i = 0; i < linkCount; i++) {
           // Re-query links
           const links = await myCasesPage.$$(".otTableFont.ng-scope .ng-binding[role='link']");
-          if (!links[i]) {
+          if (links[i] == null) {
             continue;
           }
-
+          
           // =========================
           // Prepare to catch new tab
           // =========================
-  
+          
           const ticketPagePromise = new Promise<Page>(resolve => {
             myCasesPage.browser().once("targetcreated", async target => {
               const newPage = await target.page();
-  
               if (newPage) {
                 resolve(newPage);
               }
             });
           });
-  
+          
           // Click ticket
           await links[i]!.click();
-  
+          
           // Wait for ticket tab
           const ticketPage = await ticketPagePromise;
-  
           await ticketPage.bringToFront();
-  
           console.log("Ticket opened:", ticketPage.url());
-  
           await ticketPage.waitForNetworkIdle();
   
           // =========================
           // Scrape ticket
           // =========================
           
-          let ticketName = "untitled-ticket";
-          const ticketElement = await findElementWithInterval(ticketPage, '.m-n.sd.ng-binding');
-
-          if(ticketElement != null) {
-            ticketName = (ticketElement as HTMLElement).innerText.trim();
-          }
-    
-            for (let i = 0; i < 8; i++) {
-              try {
-                ticketName = await ticketPage.$eval(
-                  ".m-n.sd.ng-binding",
-                  el => (el as HTMLElement).innerText.trim()
-                );
-    
-                if (ticketName) {
-                  break;
-                }
-              } catch {
-                // Element not available yet
-              }
-    
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-  
-          const ticketDescription = await ticketPage.$eval(
+        await ticketPage.waitForSelector(".m-n.sd.ng-binding");
+        const ticketName = await ticketPage.$eval(".m-n.sd.ng-binding", el => (el as HTMLElement).innerText.trim()).catch(() => "untitled-ticket");
+        
+        await ticketPage.waitForSelector("[sn-atf-area='OT Case Description Ticket Tab']");
+        const ticketDescription = await ticketPage.$eval(
             "[sn-atf-area='OT Case Description Ticket Tab']",
             el => (el as HTMLElement).innerText.trim()
           ).catch(() => "");
@@ -228,8 +201,7 @@ export default async function scrapSubmittedTicket(page: Page) {
         // Pagination
         // =========================
   
-        const nextBtnSelector =
-          ".btn-toolbar .tableFooter.btn-group .btn.btn-default:last-child";
+        const nextBtnSelector = '[aria-label="Next page "]';
   
         const nextBtn = await myCasesPage.$(nextBtnSelector);
   
@@ -250,11 +222,8 @@ export default async function scrapSubmittedTicket(page: Page) {
           hasNextPage = false;
         } else {
           console.log("Navigating to next page...");
-  
-          await Promise.all([
-            myCasesPage.waitForNetworkIdle(),
-            nextBtn.click()
-          ]);
+          await nextBtn.click();
+          await wait(3000);
         }
       } catch (error) {
         console.error("Error scraping submitted tickets:", error);

@@ -54,18 +54,18 @@ const url: string = scrapMode == ScrapMode.SUBMITTED_TICKET ? 'https://support.o
         //     console.log('Cookies already accepted');
         // }
         
-        try {
-            // Fill credentials + login
-            await new Promise(resolve => setTimeout(resolve, 8000));
-            await page.locator('#user').fill(username);
-            await page.locator('#password').fill(password);
-            console.log('Credentials filled');
+        // try {
+        //     // Fill credentials + login
+        //     await page.waitForSelector("#user");
+        //     await page.locator('#user').fill(username);
+        //     await page.locator('#password').fill(password);
+        //     console.log('Credentials filled');
             
-            await page.locator('#signon').click();
-            console.log('Signing in...');
-        } catch (error) {
-            console.log("Already logged in");            
-        }
+        //     await page.locator('#signon').click();
+        //     console.log('Signing in...');
+        // } catch (error) {
+        //     console.log("Already logged in");            
+        // }
         
         // // Check cookie button
         // try {
