@@ -2,18 +2,19 @@ import { launch, Page } from 'puppeteer';
 import dotenv from 'dotenv';
 import scrapSubmittedTicket from './scrap_submitted_ticket.js';
 import scrapPublicTicket from './scrap_public_ticket.js';
+import { ScrapMode } from './types/ScrapMode.js';
 
 dotenv.config();
 
 const headless: boolean = process.env.HEADLESS_MODE === 'true';
 const username: string = process.env.USER_NAME ?? "";
 const password: string = process.env.USER_PASSWORD ?? "";
-const scrapMode: string = process.env.SCRAP_MODE ? process.env.SCRAP_MODE.toUpperCase() : "PUBLIC_TICKET";
+const scrapMode: ScrapMode = ScrapMode[process.env.SCRAP_MODE as keyof typeof ScrapMode];
 const userAgent: string = process.env.BROWSER_USER_AGENT ?? "";
 const executablePath: string | undefined = process.env.EXECUTEABLE_PATH;
 const userDataDir: string | undefined = process.env.USER_DATA_DIR;
 const timeout: number = parseInt(process.env.DEFAULT_TIMEOUT ?? "30000");
-const url: string = 'https://support.opentext.com/csm';
+const url: string = scrapMode == ScrapMode.SUBMITTED_TICKET ? 'https://support.opentext.com/csm?id=csm_my_cases' : 'https://support.opentext.com/csm';
 
 (async () => {
     const browser = await launch({
@@ -29,17 +30,6 @@ const url: string = 'https://support.opentext.com/csm';
     });
 
     try {
-        console.log({
-            ...(executablePath ? { executablePath } : {}),
-            ...(userDataDir ? { userDataDir } : {}),
-            headless,
-            defaultViewport: null,
-            args: [
-                '--disable-http2', 
-                '--disable-blink-features=AutomationControlled', // Hides the navigator.webdriver flag
-                '--no-sandbox'
-            ]
-        })
         const page = await browser.newPage();
         if(userAgent.length > 0) {
             await page.setUserAgent(userAgent);
@@ -64,18 +54,18 @@ const url: string = 'https://support.opentext.com/csm';
         //     console.log('Cookies already accepted');
         // }
         
-        // try {
-        //     // Fill credentials + login
-        //     await new Promise(resolve => setTimeout(resolve, 8000));
-        //     await page.locator('#user').fill(username);
-        //     await page.locator('#password').fill(password);
-        //     console.log('Credentials filled');
+        try {
+            // Fill credentials + login
+            await new Promise(resolve => setTimeout(resolve, 8000));
+            await page.locator('#user').fill(username);
+            await page.locator('#password').fill(password);
+            console.log('Credentials filled');
             
-        //     await page.locator('#signon').click();
-        //     console.log('Signing in...');
-        // } catch (error) {
-        //     console.log("Already logged in");            
-        // }
+            await page.locator('#signon').click();
+            console.log('Signing in...');
+        } catch (error) {
+            console.log("Already logged in");            
+        }
         
         // // Check cookie button
         // try {
@@ -87,9 +77,9 @@ const url: string = 'https://support.opentext.com/csm';
         //     console.log('Cookies already accepted');
         // }
         
-        if(scrapMode == "SUBMITTED_TICKET") {
+        if(scrapMode == ScrapMode.SUBMITTED_TICKET) {
             scrapSubmittedTicket(page);
-        } else if(scrapMode == "PUBLIC_TICKET") {
+        } else if(scrapMode == ScrapMode.PUBLIC_TICKET) {
             scrapPublicTicket(page);
         }
     } catch (error) {
