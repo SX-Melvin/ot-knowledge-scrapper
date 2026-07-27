@@ -54,8 +54,25 @@ export default async function scrapSubmittedTicket(page: Page) {
         );
 
         if (element) {
-          console.log(element);
-          (element as HTMLElement).click();
+          const li = element.closest("li");
+          if(li) {
+            li.dispatchEvent(
+              new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              })
+            );
+            li.dispatchEvent(
+              new MouseEvent("mouseup", {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              })
+            );
+
+            li.click();
+          }
         }
       },
       account
@@ -73,7 +90,7 @@ export default async function scrapSubmittedTicket(page: Page) {
 
         console.log(`Found ${linkCount} tickets`);
         
-        for (let i = 0; i < 1; i++) {
+        for (let i = 0; i < linkCount; i++) {
           // Re-query links
           const links = await myCasesPage.$$(".otTableFont.ng-scope .ng-binding[role='link']");
           if (links[i] == null) {
@@ -217,7 +234,7 @@ export default async function scrapSubmittedTicket(page: Page) {
             el.getAttribute("disabled") === "disabled"
         );
   
-        if (!isDisabled) {
+        if (isDisabled) {
           console.log("Reached last page.");
           hasNextPage = false;
         } else {
