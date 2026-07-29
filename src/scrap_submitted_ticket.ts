@@ -1,18 +1,22 @@
-import { ElementHandle, Page } from 'puppeteer';
-import dotenv from 'dotenv';
-import { createOKFMarkdownFile } from './utils/createOKFYamlHeader.js';
-import { createThreadFormat } from './utils/createThreadFormat.js';
-import { setTimeout as wait} from 'node:timers/promises';
-import { clickElement } from './utils/clickElement.js';
-import { mouseDownElement } from './utils/mouseDownElement.js';
+import type { Page, Locator } from "playwright";
+import dotenv from "dotenv";
+import { createOKFMarkdownFile } from "./utils/createOKFYamlHeader.js";
+import { createThreadFormat } from "./utils/createThreadFormat.js";
+import { setTimeout as wait } from "node:timers/promises";
+import { clickElement } from "./utils/clickElement.js";
+import { mouseDownElement } from "./utils/mouseDownElement.js";
 
 dotenv.config();
 
-const timeout: number = parseInt(process.env.DEFAULT_TIMEOUT ?? "30000");
+const timeout: number = parseInt(
+  process.env.DEFAULT_TIMEOUT ?? "30000"
+);
 
 export default async function scrapSubmittedTicket(page: Page) {
-  console.log("Scrapping submitted ticket...");
-  var accountSelected: string[] = [];
+  console.log("Scraping submitted ticket...");
+
+  const accountSelected: string[] = [];
+
   page.setDefaultTimeout(timeout);
 
   // =========================
@@ -20,230 +24,286 @@ export default async function scrapSubmittedTicket(page: Page) {
   // =========================
 
   const myCasesPage = page;
-  console.log("My Cases opened:", myCasesPage.url());
-  
-  while(true) {
-    await clickElement(myCasesPage, '.UserName.ng-binding');
-    await clickElement(myCasesPage, '.selectAccount.ng-scope');
-    await mouseDownElement(myCasesPage, '.padStyle div.select2-container a.select2-choice');
-    await myCasesPage.waitForSelector("div.select2-result-label");
-  
-    const account = await myCasesPage.$$eval(
-      "div.select2-result-label",
-      (els, selectedAccounts) => {
-        console.log('selectedAccounts', selectedAccounts)
-        return els.find(
-          x => !selectedAccounts.includes(x.innerText.trim())
-        )?.innerText.trim() ?? null;
-      },
-      accountSelected
-    );
 
-    if(!account) {
-      console.log("All account has been scrapped");
+  console.log("My Cases opened:", myCasesPage.url());
+
+  while (true) {
+    await clickElement(myCasesPage, ".UserName.ng-binding");
+    await clickElement(myCasesPage, ".selectAccount.ng-scope");
+    await wait(2000);
+    await mouseDownElement(myCasesPage, ".padStyle div.select2-container a.select2-choice");
+    await myCasesPage.locator("div.select2-result-label").first().waitFor();
+
+    // =========================
+    // Find next account
+    // =========================
+
+    const account = await myCasesPage
+      .locator("div.select2-result-label")
+      .evaluateAll(
+        (els, selectedAccounts) => {
+          return (
+            els.find(
+              x =>
+                !selectedAccounts.includes(
+                  (x as HTMLElement).innerText.trim()
+                )
+            ) as HTMLElement | undefined
+          )?.innerText.trim() ?? null;
+        },
+        accountSelected
+      );
+
+    if (!account) {
+      console.log("All accounts have been scraped");
       break;
     }
-
+    
     accountSelected.push(account);
-
-    await myCasesPage.$$eval(
-      "div.select2-result-label",
-      (els, accountName) => {
-        const element = els.find(
-          x => x.innerText.trim() === accountName
-        );
-
-        if (element) {
-          const li = element.closest("li");
-          if(li) {
-            li.dispatchEvent(
-              new MouseEvent("mousedown", {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              })
-            );
-            li.dispatchEvent(
-              new MouseEvent("mouseup", {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              })
-            );
-
-            li.click();
-          }
-        }
-      },
-      account
-    );
+    
+    // =========================
+    // Select account
+    // =========================
+    
+    const accountOption = myCasesPage
+    .locator("div.select2-result-label")
+    .filter({ hasText: account })
+    .first();
+    
+    await accountOption.waitFor();
+    await accountOption.dispatchEvent("mousedown");
+    await accountOption.click();
 
     console.log("Scraping account:", account);
-    await clickElement(myCasesPage, '.accountButton');
+
+    await clickElement(
+      myCasesPage,
+      ".accountButton"
+    );
+
     await wait(3000);
 
+    // =========================
+    // Scrape ticket pages
+    // =========================
+
     let hasNextPage = true;
+
     while (hasNextPage) {
       try {
-        await myCasesPage.waitForSelector(".otTableFont.ng-scope .ng-binding[role='link']");
-        const linkCount = await myCasesPage.$$eval(".otTableFont.ng-scope .ng-binding[role='link']", els => els.length);
+        const ticketLinks = myCasesPage.locator(
+          ".otTableFont.ng-scope .ng-binding[role='link']"
+        );
+
+        await ticketLinks.first().waitFor();
+
+        const linkCount = await ticketLinks.count();
 
         console.log(`Found ${linkCount} tickets`);
-        
+
         for (let i = 0; i < linkCount; i++) {
-          // Re-query links
-          const links = await myCasesPage.$$(".otTableFont.ng-scope .ng-binding[role='link']");
-          if (links[i] == null) {
-            continue;
-          }
-          
+          // Re-query the link
+          const ticketLink = myCasesPage
+            .locator(
+              ".otTableFont.ng-scope .ng-binding[role='link']"
+            )
+            .nth(i);
+
           // =========================
           // Prepare to catch new tab
           // =========================
-          
-          const ticketPagePromise = new Promise<Page>(resolve => {
-            myCasesPage.browser().once("targetcreated", async target => {
-              const newPage = await target.page();
-              if (newPage) {
-                resolve(newPage);
-              }
-            });
-          });
-          
+
+          const ticketPagePromise =
+            myCasesPage.context().waitForEvent("page");
+
           // Click ticket
-          await links[i]!.click();
-          
-          // Wait for ticket tab
+          await ticketLink.click();
+
+          // Wait for new tab
           const ticketPage = await ticketPagePromise;
           await ticketPage.bringToFront();
           console.log("Ticket opened:", ticketPage.url());
-          await ticketPage.waitForNetworkIdle();
-  
+
           // =========================
           // Scrape ticket
           // =========================
-          
-          await ticketPage.waitForSelector(".m-n.sd.ng-binding");
-          const ticketName = await ticketPage.$eval(".m-n.sd.ng-binding", el => (el as HTMLElement).innerText.trim()).catch(() => "untitled-ticket");
-          
-          await ticketPage.waitForSelector("[sn-atf-area='OT Case Description Ticket Tab']");
-          const ticketDescription = await ticketPage.$eval(
-              "[sn-atf-area='OT Case Description Ticket Tab']",
-              el => (el as HTMLElement).innerText.trim()
-            ).catch(() => "");
-    
-            const threads: string[] = [];
-            let threadNumber = 1;
-    
-            await ticketPage.waitForSelector(
-              "div.timeline-panel-inner.default-comment"
-            );
-    
-            const timelines: ElementHandle<HTMLDivElement>[] =
-              await ticketPage.$$("div.timeline-panel.timeline-border");
-    
-            for (const timeline of timelines) {
-              const paragraphs = await timeline.$eval(
-                "div.timeline-panel-inner.default-comment",
-                el =>
-                  Array.from(el.querySelectorAll("p"))
-                    .map(p => (p as HTMLElement).innerText.trim())
-                    .filter(text => text.length > 0)
-              ).catch(() => []);
-    
-              const author = await timeline.$eval(
-                "div.timeline-title.h4.ng-binding",
-                el => (el as HTMLElement).innerText.trim()
-              ).catch(() => "Unknown");
-    
-              const type = await timeline.$eval(
-                "small.text-muted.journal-type.ng-binding",
-                el => (el as HTMLElement).innerText.trim()
-              ).catch(() => "");
-    
-              const time = await timeline.$eval(
-                "time",
-                el =>
-                  el.getAttribute("title") ??
-                  (el.querySelector(
-                    ".sr-only.ng-binding"
-                  ) as HTMLElement | null)?.innerText ??
-                  "N/A"
-              ).catch(() => "N/A");
-    
-              threads.push(
-                createThreadFormat({
-                  author,
-                  type,
-                  comments: paragraphs,
-                  threadNumber,
-                  time
+
+          const ticketName = await ticketPage
+            .locator(".m-n.sd.ng-binding")
+            .innerText()
+            .catch(() => "untitled-ticket");
+
+          const ticketDescription =
+            await ticketPage
+              .locator(
+                "[sn-atf-area='OT Case Description Ticket Tab']"
+              )
+              .innerText()
+              .catch(() => "");
+
+          // =========================
+          // Scrape threads
+          // =========================
+
+          const threads: string[] = [];
+
+          let threadNumber = 1;
+
+          const timelines = ticketPage.locator("div.timeline-panel.timeline-border");
+
+          const timelineCount =
+            await timelines.count();
+
+          for (
+            let i = 0;
+            i < timelineCount;
+            i++
+          ) {
+            const timeline = timelines.nth(i);
+
+            // Comments
+            const paragraphs =
+              await timeline
+                .locator(
+                  "div.timeline-panel-inner.default-comment p"
+                )
+                .allInnerTexts()
+                .catch(() => []);
+
+            const cleanedParagraphs =
+              paragraphs
+                .map(text => text.trim())
+                .filter(
+                  text => text.length > 0
+                );
+
+            // Author
+            const author =
+              await timeline
+                .locator(
+                  "div.timeline-title.h4.ng-binding"
+                )
+                .innerText()
+                .catch(() => "Unknown");
+
+            // Type
+            const type =
+              await timeline
+                .locator(
+                  "small.text-muted.journal-type.ng-binding"
+                )
+                .innerText()
+                .catch(() => "");
+
+            // Time
+            const time =
+              await timeline
+                .locator("time")
+                .evaluate(el => {
+                  return (
+                    el.getAttribute("title") ??
+                    el
+                      .querySelector(
+                        ".sr-only.ng-binding"
+                      )
+                      ?.textContent
+                      ?.trim() ??
+                    "N/A"
+                  );
                 })
-              );
-    
-              threadNumber++;
-            }
-    
-            // =========================
-            // Save ticket
-            // =========================
-    
-            await createOKFMarkdownFile(
-              {
-                name: ticketName,
-                title: ticketName,
-                description: ticketDescription,
-                contributors: [],
-                licenses: [],
-                resources: [],
-                version: "1.0.0"
-              },
-              threads.join("\n\n")
+                .catch(() => "N/A");
+
+            threads.push(
+              createThreadFormat({
+                author,
+                type,
+                comments: cleanedParagraphs,
+                threadNumber,
+                time
+              })
             );
-    
-            // =========================
-            // Close ticket tab
-            // =========================
-    
-            await ticketPage.close();
-            await myCasesPage.bringToFront();
-    
-            // Wait for list page again
-            await myCasesPage.waitForSelector(
+
+            threadNumber++;
+          }
+
+          // =========================
+          // Save ticket
+          // =========================
+
+          await createOKFMarkdownFile(
+            {
+              name: ticketName,
+              title: ticketName,
+              description: ticketDescription,
+              contributors: [],
+              licenses: [],
+              resources: [],
+              version: "1.0.0"
+            },
+            threads.join("\n\n")
+          );
+
+          // =========================
+          // Close ticket tab
+          // =========================
+
+          await ticketPage.close();
+
+          await myCasesPage.bringToFront();
+
+          // Wait for list page again
+          await myCasesPage
+            .locator(
               ".otTableFont.ng-scope .ng-binding[role='link']"
-            );
+            )
+            .first()
+            .waitFor();
         }
-  
+
         // =========================
         // Pagination
         // =========================
-  
-        const nextBtnSelector = '[aria-label="Next page "]';
-  
-        const nextBtn = await myCasesPage.$(nextBtnSelector);
-  
-        if (!nextBtn) {
+
+        const nextBtn =
+          myCasesPage.locator(
+            '[aria-label="Next page "]'
+          );
+
+        const nextBtnExists =
+          await nextBtn.count() > 0;
+
+        if (!nextBtnExists) {
           hasNextPage = false;
           break;
         }
-  
-        const isDisabled = await myCasesPage.$eval(
-          nextBtnSelector,
-          el =>
-            el.hasAttribute("disabled") ||
-            el.getAttribute("disabled") === "disabled"
-        );
-  
+
+        const isDisabled =
+          await nextBtn.isDisabled().catch(
+            () => false
+          );
+
         if (isDisabled) {
-          console.log("Reached last page.");
+          console.log(
+            "Reached last page."
+          );
+
           hasNextPage = false;
         } else {
-          console.log("Navigating to next page...");
+          console.log(
+            "Navigating to next page..."
+          );
+
           await nextBtn.click();
+
           await wait(3000);
         }
+
       } catch (error) {
-        console.error("Error scraping submitted tickets:", error);
+        console.error(
+          "Error scraping submitted tickets:",
+          error
+        );
+
         hasNextPage = false;
       }
     }

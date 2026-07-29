@@ -1,9 +1,13 @@
-import type { Page } from "puppeteer";
+import type { Page } from "playwright";
 
-export async function clickElement(page: Page, selector: string) {
-    await page.waitForSelector(selector);
-    return await page.$eval(
-      selector,
-      (el) => (el as HTMLElement).click()
-    );
-} 
+export async function clickElement(
+    page: Page,
+    selector: string
+) {
+    await page
+        .locator(selector)
+        .first()
+        .evaluate((el) => {
+            (el as HTMLElement).click();
+        });
+}

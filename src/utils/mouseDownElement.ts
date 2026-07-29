@@ -1,20 +1,16 @@
-import type { Page } from "puppeteer";
+import type { Page } from "playwright";
 
 export async function mouseDownElement(
   page: Page,
   selector: string
-) {
-  await page.waitForSelector(selector);
-
-  return await page.$eval(
-    selector,
-    (el) =>
-      (el as HTMLElement).dispatchEvent(
-        new MouseEvent("mousedown", {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        })
-      )
-  );
+): Promise<void> {
+  await page.locator(selector).first().evaluate((element) => {
+    element.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      })
+    );
+  });
 }

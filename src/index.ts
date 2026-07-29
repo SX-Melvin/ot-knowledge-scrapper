@@ -1,95 +1,130 @@
-import { launch, Page } from 'puppeteer';
-import dotenv from 'dotenv';
-import scrapSubmittedTicket from './scrap_submitted_ticket.js';
-import scrapPublicTicket from './scrap_public_ticket.js';
-import { ScrapMode } from './types/ScrapMode.js';
-import { setTimeout as wait} from 'node:timers/promises';
+import { chromium } from "playwright";
+import type { BrowserContext, Page } from "playwright";
+import dotenv from "dotenv";
+import scrapSubmittedTicket from "./scrap_submitted_ticket.js";
+import scrapPublicTicket from "./scrap_public_ticket.js";
+import { ScrapMode } from "./types/ScrapMode.js";
 
 dotenv.config();
 
-const headless: boolean = process.env.HEADLESS_MODE === 'true';
+const headless: boolean = process.env.HEADLESS_MODE === "true";
 const username: string = process.env.USER_NAME ?? "";
 const password: string = process.env.USER_PASSWORD ?? "";
-const scrapMode: ScrapMode = ScrapMode[process.env.SCRAP_MODE as keyof typeof ScrapMode];
+
+const scrapMode: ScrapMode =
+    ScrapMode[process.env.SCRAP_MODE as keyof typeof ScrapMode];
+
 const userAgent: string = process.env.BROWSER_USER_AGENT ?? "";
 const executablePath: string | undefined = process.env.EXECUTEABLE_PATH;
-const userDataDir: string | undefined = process.env.USER_DATA_DIR;
-const timeout: number = parseInt(process.env.DEFAULT_TIMEOUT ?? "30000");
-const url: string = scrapMode == ScrapMode.SUBMITTED_TICKET ? 'https://support.opentext.com/csm?id=csm_my_cases' : 'https://support.opentext.com/csm';
+const userDataDir: string = process.env.USER_DATA_DIR ?? "./chrome-profile";
+
+const timeout: number = parseInt(
+    process.env.DEFAULT_TIMEOUT ?? "30000"
+);
+
+const url =
+    scrapMode === ScrapMode.SUBMITTED_TICKET
+        ? "https://support.opentext.com/csm?id=csm_my_cases"
+        : "https://support.opentext.com/csm?id=ot_kb_search&spa=1&u_product_line=a2ef151c1bb24d10fea2ec20604bcb1a&kb_category=d6344bdadb21781068cfd6c4e296190c";
 
 (async () => {
-    const browser = await launch({
-        ...(executablePath ? { executablePath } : {}),
-        ...(userDataDir ? { userDataDir } : {}),
-        headless,
-        defaultViewport: null,
-        args: [
-            '--disable-http2', 
-            '--disable-blink-features=AutomationControlled', // Hides the navigator.webdriver flag
-            '--no-sandbox'
-        ]
-    });
+    let browser: BrowserContext | undefined;
 
     try {
-        const page = await browser.newPage();
-        if(userAgent.length > 0) {
-            await page.setUserAgent(userAgent);
-        }
-        await page.evaluateOnNewDocument(() => {
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        });
-        page.setDefaultTimeout(timeout);
-        console.log('Opening:', url);
+        /*
+         * Playwright persistent context.
+         *
+         * IMPORTANT:
+         * userDataDir is the FIRST argument.
+         */
+        browser = await chromium.launchPersistentContext(
+            userDataDir,
+            {
+                headless,
 
-        await page.goto(url, {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000
-        });
+                ...(executablePath
+                    ? { executablePath }
+                    : {}),
 
-        // // Check cookie button
-        // try {
-        //     console.log('Checking cookies button...');
-        //     await page.locator('#onetrust-accept-btn-handler').click();
-        //     console.log('Cookies accepted');
-        // } catch (error) {
-        //     console.log('Cookies already accepted');
-        // }
-        
-        try {
-            // Fill credentials + login
-            await page.waitForSelector("button#sitenav-login-button");
-            await page.locator('#user').fill(username);
-            await page.locator('#password').fill(password);
-            console.log('Credentials filled');
-            
-            await page.locator('#signon').click();
-            console.log('Signing in...');
-        } catch (error) {
-            console.log("Already logged in");            
-        }
-        
-        // // Check cookie button
-        // try {
-        //     console.log('Checking another cookies button...');
-        //     await page.locator('#onetrust-accept-btn-handler').click();
-        //     console.log('Cookies accepted');
-        //     await new Promise(resolve => setTimeout(resolve, 3000));
-        // } catch (error) {
-        //     console.log('Cookies already accepted');
-        // }
-        
-        if(scrapMode == ScrapMode.SUBMITTED_TICKET) {
-            scrapSubmittedTicket(page);
-        } else if(scrapMode == ScrapMode.PUBLIC_TICKET) {
-            scrapPublicTicket(page);
+                ...(userAgent
+                    ? { userAgent }
+                    : {}),
+
+                // Playwright equivalent of Puppeteer's defaultViewport: null
+                viewport: null,
+
+                args: [
+                    "--disable-http2",
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox"
+                ]
+            }
+        );
+
+        // Playwright automatically creates the first page for a
+        // persistent browser context.
+        const pages = browser.pages();
+
+        const page: Page | undefined =
+            pages.length > 0
+                ? pages[0]
+                : await browser.newPage();
+
+        if(page) {
+
+            page.setDefaultTimeout(timeout);
+    
+            console.log("Opening:", url);
+    
+            await page.goto(url, {
+                waitUntil: "domcontentloaded",
+                timeout: 60000
+            });
+    
+            /*
+             * Login
+             */
+            try {
+                console.log("Checking login...");
+    
+                await page
+                    .locator("button#sitenav-login-button")
+                    .waitFor({
+                        state: "visible",
+                        timeout: 10000
+                    });
+    
+                await page.locator("#user").fill(username);
+                await page.locator("#password").fill(password);
+    
+                console.log("Credentials filled");
+    
+                await page.locator("#signon").click();
+    
+                console.log("Signing in...");
+            } catch (error) {
+                console.log("Already logged in");
+            }
+    
+            /*
+             * Scrape
+             */
+            if (scrapMode === ScrapMode.SUBMITTED_TICKET) {
+                await scrapSubmittedTicket(page);
+            } else if (scrapMode === ScrapMode.PUBLIC_TICKET) {
+                await scrapPublicTicket(page);
+            }
         }
     } catch (error) {
-        console.error('Scraping failed:', error);
+        console.error("Scraping failed:", error);
+
         if (!headless) {
+            // Keep browser open for debugging
             await new Promise(() => {});
         }
+
     } finally {
-        if (headless) {
+        if (headless && browser) {
             await browser.close();
         }
     }

@@ -1,5 +1,6 @@
-import { launch, Page } from 'puppeteer';
+import type { BrowserContext, Page } from "playwright";
 import dotenv from 'dotenv';
+import { createOKFMarkdownFile } from './utils/createOKFYamlHeader.js';
 
 dotenv.config();
 
@@ -11,11 +12,26 @@ const userAgent = process.env.BROWSER_USER_AGENT;
 const timeout = process.env.DEFAULT_TIMEOUT;
 
 export default async function scrapPublicTicket(page: Page) {
-    // Go to product page
-    await page.locator("h2[title='Content Server'] + a").click();
-    console.log('Redirecting to product page');
-    
-    // Go to knowledge page
-    await page.locator("a.ot-list-links.ot-more.ot-white-arrow-bold").click();
-    console.log('Redirected to knowledge page');
+    while(true) {
+        const links = await page.$$(".knowledge-articles .kb-article-summary a");
+
+        for(const link of links) {
+            await link.click();
+
+            // const headers = await page.$$eval("h2.widget-header", elements => elements.map(el => (el as HTMLElement).innerText.trim()));
+
+            // await createOKFMarkdownFile(
+            //     {
+            //     name: ticketName,
+            //     title: ticketName,
+            //     description: ticketDescription,
+            //     contributors: [],
+            //     licenses: [],
+            //     resources: [],
+            //     version: "1.0.0"
+            //     },
+            //     threads.join("\n\n")
+            // );
+        }
+    }
 }
