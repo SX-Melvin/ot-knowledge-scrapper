@@ -2,9 +2,9 @@ import type { Page, Locator } from "playwright";
 import dotenv from "dotenv";
 import { createOKFMarkdownFile } from "./utils/createOKFYamlHeader.js";
 import { createThreadFormat } from "./utils/createThreadFormat.js";
-import { setTimeout as wait } from "node:timers/promises";
 import { clickElement } from "./utils/clickElement.js";
 import { mouseDownElement } from "./utils/mouseDownElement.js";
+import { delay } from "./utils/delay.js";
 
 dotenv.config();
 
@@ -30,7 +30,7 @@ export default async function scrapSubmittedTicket(page: Page) {
   while (true) {
     await clickElement(myCasesPage, ".UserName.ng-binding");
     await clickElement(myCasesPage, ".selectAccount.ng-scope");
-    await wait(2000);
+    await delay(2000);
     await mouseDownElement(myCasesPage, ".padStyle div.select2-container a.select2-choice");
     await myCasesPage.locator("div.select2-result-label").first().waitFor();
 
@@ -81,7 +81,7 @@ export default async function scrapSubmittedTicket(page: Page) {
       ".accountButton"
     );
 
-    await wait(3000);
+    await delay(3000);
 
     // =========================
     // Scrape ticket pages
@@ -132,6 +132,11 @@ export default async function scrapSubmittedTicket(page: Page) {
             .locator(".m-n.sd.ng-binding")
             .innerText()
             .catch(() => "untitled-ticket");
+          
+          const caseNumber = await ticketPage
+            .locator(".ot-caseNumber.ng-binding")
+            .innerText()
+            .catch(() => "untitled-ticket-number");
 
           const ticketDescription =
             await ticketPage
@@ -232,7 +237,7 @@ export default async function scrapSubmittedTicket(page: Page) {
 
           await createOKFMarkdownFile(
             {
-              name: ticketName,
+              name: caseNumber,
               title: ticketName,
               description: ticketDescription,
               contributors: [],
@@ -295,7 +300,7 @@ export default async function scrapSubmittedTicket(page: Page) {
 
           await nextBtn.click();
 
-          await wait(3000);
+          await delay(3000);
         }
 
       } catch (error) {

@@ -1,37 +1,109 @@
 import type { BrowserContext, Page } from "playwright";
 import dotenv from 'dotenv';
 import { createOKFMarkdownFile } from './utils/createOKFYamlHeader.js';
+import { delay } from "./utils/delay.js";
+import { extractTicketSectionInnerText } from "./utils/extractTicketSectionInnerText.js";
+import { createTicketSectionFormat } from "./utils/createTicketSectionFormat.js";
+import { createListSection } from "./utils/createListSection.js";
 
 dotenv.config();
 
-const headlessMode = process.env.HEADLESS_MODE === 'true';
-const username = process.env.USER_NAME;
-const scrapMode = process.env.SCRAP_MODE;
-const password = process.env.USER_PASSWORD;
-const userAgent = process.env.BROWSER_USER_AGENT;
-const timeout = process.env.DEFAULT_TIMEOUT;
+const timeout: number = parseInt(
+  process.env.DEFAULT_TIMEOUT ?? "30000"
+);
 
 export default async function scrapPublicTicket(page: Page) {
+    page.setDefaultTimeout(timeout);
+
     while(true) {
-        const links = await page.$$(".knowledge-articles .kb-article-summary a");
+        const links = await page.locator(".knowledge-articles .kb-article-summary a").all();
 
         for(const link of links) {
-            await link.click();
+            const newPagePromise = page.context().waitForEvent("page");
 
-            // const headers = await page.$$eval("h2.widget-header", elements => elements.map(el => (el as HTMLElement).innerText.trim()));
+            await link.click({
+                modifiers: ["Control"] // Use "Meta" on macOS
+            });
 
-            // await createOKFMarkdownFile(
-            //     {
-            //     name: ticketName,
-            //     title: ticketName,
-            //     description: ticketDescription,
-            //     contributors: [],
-            //     licenses: [],
-            //     resources: [],
-            //     version: "1.0.0"
-            //     },
-            //     threads.join("\n\n")
-            // );
+            const newPage = await newPagePromise;
+
+            await newPage.bringToFront();
+
+            const header = await newPage.locator("h2.widget-header").innerText();
+            const summary = await extractTicketSectionInnerText(newPage, "Summary");
+            const cause = await extractTicketSectionInnerText(newPage, "Cause");
+            const resolution = await extractTicketSectionInnerText(newPage, "Resolution");
+            const additionalInformation = await extractTicketSectionInnerText(newPage, "Additional Information");
+            const caseNumber = await newPage.locator(".kb-number-info .ng-binding").first().innerText();
+            const appliesTo = await newPage
+            .locator("h3.ng-binding")
+            .evaluateAll((elements) => {
+                const heading = elements.find(el => (el as HTMLElement).innerText.trim() === "Applies to");
+                
+                const paragraphs = heading
+                ?.parentElement
+                ?.parentElement
+                ?.querySelectorAll(
+                    "section.ng-binding.ng-scope p"
+                );
+                
+                return [...(paragraphs ?? [])].map(p => {
+                    const clone = p.cloneNode(true) as HTMLElement;
+
+                    clone.querySelectorAll("span").forEach(span => span.remove());
+                    
+                    return clone.innerText.trim();
+                });
+            });
+            
+            const sections: string[] = [
+                createTicketSectionFormat({
+                    section: 'Summary',
+                    text: summary
+                }),
+                createTicketSectionFormat({
+                    section: 'Cause',
+                    text: cause
+                }),
+                createTicketSectionFormat({
+                    section: 'Resolution',
+                    text: resolution
+                }),
+                createTicketSectionFormat({
+                    section: 'Additional Information',
+                    text: additionalInformation
+                }),
+                createListSection("Applies to", appliesTo)
+            ];
+            
+            newPage.close();
+            
+            await createOKFMarkdownFile(
+                {
+                    name: caseNumber,
+                    title: header,
+                    description: summary,
+                    contributors: [],
+                    licenses: [],
+                    resources: [],
+                    version: "1.0.0"
+                },
+                sections.join("\n\n")
+            );
         }
+
+        const parent = page
+            .locator(".page-link[aria-label='Next']")
+            .first()
+            .locator("..");
+        const isDisabled = await parent.locator(".disabled").count() > 0;
+    
+        if(isDisabled) {
+            break;
+        }
+
+        await page.locator(".page-link[aria-label='Next']").click();
     }
+
+    console.log("All tickets scrapped");
 }

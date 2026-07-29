@@ -21,3 +21,8 @@ export interface ThreadFormat {
   comments: string[]
   threadNumber: number
 }
+
+export interface TicketSectionFormat {
+  section: string
+  text: string
+}
