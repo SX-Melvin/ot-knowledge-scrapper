@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import scrapSubmittedTicket from "./scrap_submitted_ticket.js";
 import scrapPublicTicket from "./scrap_public_ticket.js";
 import { ScrapMode } from "./types/ScrapMode.js";
+import { constructPublicTicketUrl } from "./utils/constructPublicTicketUrl.js";
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ const timeout: number = parseInt(
 const url =
     scrapMode === ScrapMode.SUBMITTED_TICKET
         ? "https://support.opentext.com/csm?id=csm_my_cases"
-        : "https://support.opentext.com/csm?id=ot_kb_search&spa=1&u_product_line=a2ef151c1bb24d10fea2ec20604bcb1a&kb_category=d6344bdadb21781068cfd6c4e296190c";
+        : constructPublicTicketUrl();
 
 (async () => {
     let browser: BrowserContext | undefined;
