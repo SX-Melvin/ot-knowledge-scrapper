@@ -13,17 +13,13 @@ export async function createOKFMarkdownFile(
   body = ''
 ) {
   try {
-    console.log("OKF config:", config);
-
     const data = createOKFFrontmatter(config);
-
     const yamlLines = [
       '---',
       `profile: "${data.profile}"`,
       `name: "${data.name}"`,
       `title: "${data.title}"`,
-      `description: "${data.description}"`,
-      `version: "${data.version}"`,
+      `description: "${data.description.replace(/\s+/g, " ").trim()}"`,
       `created: "${data.created}"`,
       '---'
     ];
@@ -57,13 +53,7 @@ export async function createOKFMarkdownFile(
       }
     );
 
-    // Verify file exists
-    const fileExists = await fs.access(filePath)
-      .then(() => true)
-      .catch(() => false);
-
     return result;
-
   } catch (error) {
     console.error("Failed to create OKF Markdown file:");
     console.error(error);

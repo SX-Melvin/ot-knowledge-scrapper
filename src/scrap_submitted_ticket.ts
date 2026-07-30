@@ -237,13 +237,10 @@ export default async function scrapSubmittedTicket(page: Page) {
 
           await createOKFMarkdownFile(
             {
+              profile: "support-case-thread",
               name: caseNumber,
               title: ticketName,
-              description: ticketDescription,
-              contributors: [],
-              licenses: [],
-              resources: [],
-              version: "1.0.0"
+              description: ticketDescription
             },
             threads.join("\n\n")
           );
@@ -253,7 +250,6 @@ export default async function scrapSubmittedTicket(page: Page) {
           // =========================
 
           await ticketPage.close();
-
           await myCasesPage.bringToFront();
 
           // Wait for list page again

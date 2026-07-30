@@ -1,17 +1,25 @@
 import type { ThreadFormat } from "../types/OKF.js";
 
-export function createThreadFormat(data: ThreadFormat) {
-    let result = `
-        ---
-        ### Comment ${data.threadNumber}
-        **Author:** ${data.author}
-        **Time:** ${data.time}  
-        **Type:** ${data.type}  
-    `;
+export function createThreadFormat(
+    data: ThreadFormat,
+    delimiterOnTop: boolean = true
+): string {
+    const lines: string[] = [];
 
-    for(const comment of data.comments) {
-        result += `> ${comment}\n`;
+    if (delimiterOnTop) {
+        lines.push("---");
     }
 
-    return result;
+    lines.push(
+        `### Comment ${data.threadNumber}`,
+        `**Author:** ${data.author}`,
+        `**Time:** ${data.time}`,
+        `**Type:** ${data.type}`
+    );
+
+    for (const comment of data.comments) {
+        lines.push(`> ${comment}`);
+    }
+
+    return lines.join("\n") + "\n";
 }

@@ -59,8 +59,8 @@ export default async function scrapPublicTicket(page: Page) {
             const sections: string[] = [
                 createTicketSectionFormat({
                     section: 'Summary',
-                    text: summary
-                }),
+                    text: summary,
+                }, false),
                 createTicketSectionFormat({
                     section: 'Cause',
                     text: cause
@@ -80,13 +80,10 @@ export default async function scrapPublicTicket(page: Page) {
             
             await createOKFMarkdownFile(
                 {
+                    profile: "knowledge-base-article",
                     name: caseNumber,
                     title: header,
-                    description: summary,
-                    contributors: [],
-                    licenses: [],
-                    resources: [],
-                    version: "1.0.0"
+                    description: summary
                 },
                 sections.join("\n\n")
             );
